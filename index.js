@@ -9,16 +9,6 @@ const canvas = require('./routes/canvas')
 
 require('dotenv').config();
 
-mongoose
-  .connect(process.env.MONGODB_ATLAS_URI, {
-  })
-  .then(() => {
-    console.log('connected to MongoDB')
-  })
-  .catch((error) => {
-    console.log('error connection to MongoDB:', error.message)
-  })
-
 app.use(cors())
 
 app.use(express.json())
