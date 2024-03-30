@@ -1,16 +1,15 @@
 const fetch = require('node-fetch');
 
 const canvasInstance = 'k12.instructure.com';
-// const accessToken = '6936~TpgfnRxok6isETnVGDOyqKOmyZAqm0jP2qtO7BakB38czqCoT6AKUuTP0SqNOtQu';
+// const accessToken = '6936~5ImUFdFYh3oKhC0QYY60w8t8xnO8JQUh5aXg6jmaVBFWKLMBEeu7moq9h1LSxl5H';
 const accessToken = '6936~qSFOAGSTIS65FuZtfw5q9OT88CIcauImi1NMifOjtJagUklzXhBBcQjLA7fXRSN5';
 const apiUrl = `https://${canvasInstance}/api/v1/courses?per_page=9`;
 
 const getCourses = async (req, res) => {
-    await getAllCourses(apiUrl + `&page=${req.query.pageNum}`).then(async courses => {
+    await getAllCourses(apiUrl + `&page=${req.query.pageNum}`, req.query.token).then(async courses => {
         if (courses) {
             for (var i = 0; i < courses.length; i++) {
                 courses[i].progress = await getProgressById(courses[i].id);
-                // courses[i].enrollments = await getCourseEnrollments(courses[i].id);
             }
         }
         res.send(courses)
@@ -119,12 +118,12 @@ const getContentById = async (req, res) => {
 };
 
 
-async function getAllCourses(url) {
+async function getAllCourses(url, token) {
     try {
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': token
             }
         });
 
@@ -140,16 +139,16 @@ async function getAllCourses(url) {
 }
 
 const getTotal = async (req, res) => {
-    const count = await getTotalCount(`https://${canvasInstance}/api/v1/courses?per_page=100`);
+    const count = await getTotalCount(`https://${canvasInstance}/api/v1/courses?per_page=100`, req.query.token);
     res.send({ count })
 }
 
-async function getTotalCount(url, allCourses = []) {
+async function getTotalCount(url, token, allCourses = []) {
     try {
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': token
             }
         });
 
@@ -165,9 +164,8 @@ async function getTotalCount(url, allCourses = []) {
 
         if (nextLink) {
             const nextUrl = nextLink.split(';')[0].slice(1, -1);
-            return getTotalCount(nextUrl, allCourses);
+            return getTotalCount(nextUrl, token, allCourses);
         }
-
         return allCourses.length;
     } catch (error) {
         console.error('Failed to fetch courses:', error);
