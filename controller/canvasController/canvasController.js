@@ -1,51 +1,46 @@
-const fetch = require('node-fetch');
+const mongoose = require('mongoose');
+const axios = require('axios')
 
 const canvasInstance = 'k12.instructure.com';
 // const accessToken = '6936~5ImUFdFYh3oKhC0QYY60w8t8xnO8JQUh5aXg6jmaVBFWKLMBEeu7moq9h1LSxl5H';
-const accessToken = '6936~qSFOAGSTIS65FuZtfw5q9OT88CIcauImi1NMifOjtJagUklzXhBBcQjLA7fXRSN5';
-const apiUrl = `https://${canvasInstance}/api/v1/courses?per_page=9`;
-
+// const accessToken = '6936~qSFOAGSTIS65FuZtfw5q9OT88CIcauImi1NMifOjtJagUklzXhBBcQjLA7fXRSN5';
+// const apiUrl = `https://${canvasInstance}/api/v1/courses?per_page=9`;
+const Course = mongoose.model('courses', new mongoose.Schema({}), 'courses');
+const Module = mongoose.model('modules', new mongoose.Schema({}), 'modules');
+const ModuleItem = mongoose.model('moduleItems', new mongoose.Schema({}), 'modules');
 const getCourses = async (req, res) => {
-    await getAllCourses(apiUrl + `&page=${req.query.pageNum}`, req.query.token).then(async courses => {
-        if (courses) {
-            for (var i = 0; i < courses.length; i++) {
-                courses[i].progress = await getProgressById(courses[i].id);
+    try {
+        const coursesWithAssignments = await Course.aggregate([
+            {
+                $lookup: {
+                    from: 'assignments',
+                    localField: 'canvasCourseId',
+                    foreignField: 'courseId',
+                    as: 'assignments'
+                }
             }
-        }
-        res.send(courses)
-    });
+        ]);
 
+        res.send(coursesWithAssignments);
+    } catch (err) {
+        console.log(err);
+        res.status(500).send('Error while retrieving courses and assignments');
+    }
 };
 
-const getProgressById = async (courseId) => {
-    const url = `https://${canvasInstance}/api/v1/courses/${courseId}/assignments`;
-    const options = {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'content-type': 'application/json'
-        },
-    };
+async function getAllCourses(url, token) {
+}
 
-    try {
-        const response = await fetch(url, options);
-        const assignments = await response.json();
-        const totalAssignments = assignments.length;
-        const publishedAssignments = await assignments.filter(assignment => assignment.published).length;
-        let rlt = publishedAssignments / totalAssignments * 100;
-        return rlt;
-    } catch (error) {
-        console.error('Failed to retrieve assignments:', error);
-    }
+
+const getProgressById = async (courseId, token) => {
 }
 
 const getLecture = async (req, res) => {
-    console.log(req.query)
     const url = `https://k12.instructure.com/api/v1/courses/${req.query.info.course_id}/pages/${req.query.info.page_url}`;
     const options = {
         method: 'GET',
         headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer 6936~qSFOAGSTIS65FuZtfw5q9OT88CIcauImi1NMifOjtJagUklzXhBBcQjLA7fXRSN5`,
             'content-type': 'application/json'
         },
     };
@@ -59,117 +54,33 @@ const getLecture = async (req, res) => {
     }
 }
 
-// const getCourseEnrollments = async (courseId) => {
-//     const url = `https://${canvasInstance}/api/v1/courses/${courseId}/enrollments`;
-//     const options = {
-//         method: 'GET',
-//         headers: {
-//             'Authorization': `Bearer ${accessToken}`,
-//             'content-type': 'application/json'
-//         },
-//     };
-
-//     try {
-//         const response = await fetch(url, options);
-//         const enrollments = await response.json();
-//         return enrollments;
-//     } catch (error) {
-//         console.error('Failed to retrieve assignments:', error);
-//     }
-// }
-
-async function fetchModules(courseId) {
-    const url = `https://${canvasInstance}/api/v1/courses/${courseId}/modules`;
-    const headers = {
-        'Authorization': `Bearer ${accessToken}`,
-    };
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-        throw new Error('Failed to fetch modules');
-    }
-    return response.json();
+async function fetchModules(courseId, token) {
 }
-
-const fetchModuleItems = async (courseId, moduleId) => {
-    const url = `https://${canvasInstance}/api/v1/courses/${courseId}/modules/${moduleId}/items`;
-    const headers = {
-        'Authorization': `Bearer ${accessToken}`,
-    };
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-        throw new Error(`Failed to fetch module items for module ${moduleId}`);
-    }
-    return response.json();
-}
-
 
 const getContentById = async (req, res) => {
-    try {
-        const modules = await fetchModules(req.query.course_id);
-        for (var i = 0; i < modules.length; i++) {
-            const items = await fetchModuleItems(req.query.course_id, modules[i].id);
-            modules[i].lessons = await items;
+    const result = await Module.aggregate([
+        { $match: { courseId: parseInt(req.query.canvasCourseId, 10) } },
+        {
+            $lookup: {
+                from: 'moduleitems', // Name of the collection in MongoDB, typically lowercase plural form
+                localField: 'canvasModuleId', // Field from the modules collection
+                foreignField: 'canvasModuleId', // Corresponding field from the moduleItems collection
+                as: 'lessons' // Output alias
+            }
         }
+    ]);
 
-        res.send(modules)
-    } catch (error) {
-        console.error(error);
-    }
+    res.status(200).send(result)
 };
 
 
-async function getAllCourses(url, token) {
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Authorization': token
-            }
-        });
 
-        if (!response.ok) {
-            throw new Error(`Error: ${response.statusText}`);
-        }
-
-        const courses = await response.json();
-        return courses;
-    } catch (error) {
-        console.error('Failed to fetch courses:', error);
-    }
-}
 
 const getTotal = async (req, res) => {
-    const count = await getTotalCount(`https://${canvasInstance}/api/v1/courses?per_page=100`, req.query.token);
-    res.send({ count })
+
 }
 
 async function getTotalCount(url, token, allCourses = []) {
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Authorization': token
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.statusText}`);
-        }
-
-        const courses = await response.json();
-        allCourses.push(...courses);
-
-        const linkHeader = response.headers.get('link');
-        const nextLink = linkHeader.split(',').find(s => s.includes('rel="next"'));
-
-        if (nextLink) {
-            const nextUrl = nextLink.split(';')[0].slice(1, -1);
-            return getTotalCount(nextUrl, token, allCourses);
-        }
-        return allCourses.length;
-    } catch (error) {
-        console.error('Failed to fetch courses:', error);
-    }
 }
 
 
@@ -179,5 +90,5 @@ module.exports = {
     getContentById,
     getTotal,
     getLecture
-    // getMyCourses
+
 }
