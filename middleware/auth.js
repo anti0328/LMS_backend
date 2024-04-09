@@ -1,36 +1,33 @@
-const jwt = require('jsonwebtoken')
-const User = require('../models/user')
-require('dotenv').config()
+const jwt = require('jsonwebtoken');
+const User = require('../models/user');
 
 const auth = async (req, res, next) => {
   try {
-    const authorization = req.get('authorization')
-    if (authorization && authorization.startsWith('Bearer')) {
-      token = authorization.substring(7)
+    // Check if token is provided
+    const token = req.headers.authorization.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ message: "You are not logged in. Please log in to get access." });
     }
 
-    const decoded = jwt.verify(token, process.env.SECRET_KEY)
-    const user = await User.findOne({ _id: decoded._id })
+    // Verify token
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
 
-    const invalidToken = await User.findOne({
-      _id: decoded._id,
-      invalidatedTokens: token
-    })
-
-    if (invalidToken)
-      return res.status(401).send({ error: 'Please authenticate.' })
-
-    if (!user) {
-      throw new Error('Please Register first')
+    // Check if user exists
+    const currentUser = await User.findById(decoded.id);
+    if (!currentUser) {
+      return res.status(401).json({ message: "The user belonging to this token no longer exists." });
     }
 
-    req.token = token
-    req.user = user
-    next()
-  } catch (e) {
-    // console.log(authorization)
-    res.status(401).send({ error: 'Please authenticate.' })
+    // Add user to request
+    req.user = currentUser;
+
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Invalid token or no token provided." });
   }
-}
+};
 
-module.exports = auth
+module.exports = {
+  auth
+}
